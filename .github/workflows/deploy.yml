@@ -2,27 +2,34 @@ name: Deploy to Production
 
 on:
   push:
-    branches:
-      - master
+    branches: [ "main" ]   # was 'master', but your script pulls 'main'
+  workflow_dispatch:        # allow manual deploys
+
+concurrency:
+  group: production
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Deploy to server
-        uses: appleboy/ssh-action@master
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: 22
+          # Optional hardening: set this after adding your host key fingerprint as a secret
+          # fingerprint: ${{ secrets.SSH_FINGERPRINT }}
           script: |
+            set -euo pipefail
             cd /server/ai3/node/
-            git pull origin main
-            npm install
-            pm2 restart ai3-calculator-app
+            git fetch --all
+            git checkout main
+            git pull --ff-only origin main
+            npm ci --omit=dev
+            pm2 restart ai3-calculator-app || pm2 start "npm start" --name ai3-calculator-app
             pm2 save
