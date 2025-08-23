@@ -2,27 +2,27 @@ name: Deploy to Production
 
 on:
   push:
-    branches:
-      - master
+    branches: [ "main" ]     # change to your default branch if not 'main'
+  workflow_dispatch:          # lets you click 'Run workflow' in the UI
 
 jobs:
-  deploy:
+  ci:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Deploy to server
-        uses: appleboy/ssh-action@master
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          port: 22
-          script: |
-            cd /server/ai3/node/
-            git pull origin main
-            npm install
-            pm2 restart ai3-calculator-app
-            pm2 save
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test --if-present
+
+  deploy:
+    needs: ci
+    runs-on: self-hosted      # this targets your private server's runner
+    steps:
+      - name: Deploy on private server
+        env:
+          # only needed if your deploy script 'git clone's a PRIVATE repo
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash /server/ai1/nikita/deploy_calculator.sh
